@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/i_book_repository.dart';
 import '../../services/i_category_service.dart';
+import '../../services/i_pdf_service.dart';
 import '../../services/i_progress_service.dart';
 import '../../viewmodels/library_viewmodel.dart';
 import '../library/library_view.dart';
@@ -31,6 +32,7 @@ class _HomeViewState extends State<HomeView> {
               books: ctx.read<IBookRepository>(),
               progress: ctx.read<IProgressService>(),
               categories: ctx.read<ICategoryService>(),
+              pdf: ctx.read<IPdfService>(),
             ),
             child: const LibraryView(),
           ),

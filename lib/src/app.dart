@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'services/i_book_repository.dart';
 import 'services/i_category_service.dart';
+import 'services/i_pdf_service.dart';
 import 'services/i_preferences_service.dart';
 import 'services/i_progress_service.dart';
 import 'services/service_locator.dart';
@@ -26,6 +27,7 @@ class MoonleafApp extends StatelessWidget {
         Provider<IBookRepository>.value(value: services.books),
         Provider<IProgressService>.value(value: services.progress),
         Provider<ICategoryService>.value(value: services.categories),
+        Provider<IPdfService>.value(value: services.pdf),
         ChangeNotifierProvider<AppViewModel>(
           create: (_) => AppViewModel(services.preferences),
         ),

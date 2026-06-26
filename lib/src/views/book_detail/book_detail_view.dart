@@ -9,7 +9,9 @@ import '../../services/i_progress_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/extensions.dart';
 import '../../viewmodels/book_detail_viewmodel.dart';
+import '../../services/i_pdf_service.dart';
 import '../../viewmodels/reader_viewmodel.dart';
+import '../reader/pdf_reader_view.dart';
 import '../reader/reader_view.dart';
 
 /// Detail screen for a single book: cover, blurb, chapter list and the
@@ -19,19 +21,26 @@ class BookDetailView extends StatelessWidget {
 
   Future<void> _openReader(BuildContext context, {int? chapter}) async {
     final detail = context.read<BookDetailViewModel>();
-    await Navigator.of(context).push(
-      fadeThroughRoute(
-        ChangeNotifierProvider<ReaderViewModel>(
-          create: (ctx) => ReaderViewModel(
-            books: ctx.read<IBookRepository>(),
-            progress: ctx.read<IProgressService>(),
-            bookId: detail.book.id,
-            startChapter: chapter,
+    
+    if (detail.book.isPdf) {
+      await Navigator.of(context).push(
+        fadeThroughRoute(PdfReaderView(book: detail.book)),
+      );
+    } else {
+      await Navigator.of(context).push(
+        fadeThroughRoute(
+          ChangeNotifierProvider<ReaderViewModel>(
+            create: (ctx) => ReaderViewModel(
+              books: ctx.read<IBookRepository>(),
+              progress: ctx.read<IProgressService>(),
+              bookId: detail.book.id,
+              startChapter: chapter,
+            ),
+            child: const ReaderView(),
           ),
-          child: const ReaderView(),
         ),
-      ),
-    );
+      );
+    }
     if (context.mounted) context.read<BookDetailViewModel>().refresh();
   }
 
@@ -43,13 +52,38 @@ class BookDetailView extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         actions: [
-          if (vm.isStarted)
+          if (vm.isStarted || book.isPdf)
             PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'reset') vm.resetProgress();
+              onSelected: (v) async {
+                if (v == 'reset') {
+                  vm.resetProgress();
+                } else if (v == 'delete_pdf') {
+                  final pdfService = context.read<IPdfService>();
+                  final booksRepo = context.read<IBookRepository>();
+                  final catService = context.read<ICategoryService>();
+                  final progService = context.read<IProgressService>();
+
+                  await pdfService.delete(book.id);
+                  booksRepo.removeBook(book.id);
+                  final allCats = catService.getAll();
+                  for (final cat in allCats.where((c) => c.bookIds.contains(book.id))) {
+                    await catService.removeBook(cat.id, book.id);
+                  }
+                  await progService.clear(book.id);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'reset', child: Text('Reset progress')),
+              itemBuilder: (_) => [
+                if (vm.isStarted)
+                  const PopupMenuItem(value: 'reset', child: Text('Reset progress')),
+                if (book.isPdf)
+                  PopupMenuItem(
+                    value: 'delete_pdf',
+                    child: Text('Delete import', style: TextStyle(color: context.colors.error)),
+                  ),
               ],
             ),
         ],
@@ -144,36 +178,38 @@ class BookDetailView extends StatelessWidget {
             style: context.text.bodyLarge?.copyWith(height: 1.5),
           ),
           const SizedBox(height: AppConstants.gapL),
-          Text('Chapters', style: context.text.titleLarge),
-          const SizedBox(height: AppConstants.gapXs),
-          ...List.generate(book.chapterCount, (i) {
-            final chapter = book.chapters[i];
-            final isCurrent = vm.isStarted && vm.currentChapter == i;
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: isCurrent
-                    ? context.colors.secondary
-                    : context.colors.surfaceContainerHighest,
-                child: Text(
-                  '${i + 1}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isCurrent
-                        ? context.colors.onSecondary
-                        : context.colors.onSurface,
+          if (!book.isPdf) ...[
+            Text('Chapters', style: context.text.titleLarge),
+            const SizedBox(height: AppConstants.gapXs),
+            ...List.generate(book.chapterCount, (i) {
+              final chapter = book.chapters[i];
+              final isCurrent = vm.isStarted && vm.currentChapter == i;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: isCurrent
+                      ? context.colors.secondary
+                      : context.colors.surfaceContainerHighest,
+                  child: Text(
+                    '${i + 1}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isCurrent
+                          ? context.colors.onSecondary
+                          : context.colors.onSurfaceVariant,
+                    ),
                   ),
                 ),
-              ),
-              title: Text(chapter.title),
-              subtitle: Text('${chapter.readingMinutes} min read'),
-              trailing: isCurrent
-                  ? Icon(Icons.bookmark, color: context.colors.secondary, size: 20)
-                  : null,
-              onTap: () => _openReader(context, chapter: i),
-            );
-          }),
+                title: Text(chapter.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text('${chapter.readingMinutes} min read'),
+                trailing: isCurrent
+                    ? Icon(Icons.bookmark, color: context.colors.secondary, size: 20)
+                    : null,
+                onTap: () => _openReader(context, chapter: i),
+              );
+            }),
+          ],
         ],
       ),
       bottomNavigationBar: SafeArea(

@@ -2,8 +2,10 @@ import 'book_repository.dart';
 import 'category_service.dart';
 import 'i_book_repository.dart';
 import 'i_category_service.dart';
+import 'i_pdf_service.dart';
 import 'i_preferences_service.dart';
 import 'i_progress_service.dart';
+import 'pdf_service.dart';
 import 'preferences_service.dart';
 import 'progress_service.dart';
 
@@ -18,20 +20,24 @@ class ServiceLocator {
     required this.books,
     required this.progress,
     required this.categories,
+    required this.pdf,
   });
 
   final IPreferencesService preferences;
   final IBookRepository books;
   final IProgressService progress;
   final ICategoryService categories;
+  final IPdfService pdf;
 
   static Future<ServiceLocator> initialize() async {
     final preferences = await PreferencesService.create();
+    final pdfService = PdfService(preferences);
     return ServiceLocator._(
       preferences: preferences,
-      books: BookRepository(),
+      books: BookRepository(pdfService: pdfService),
       progress: ProgressService(preferences),
       categories: CategoryService(preferences),
+      pdf: pdfService,
     );
   }
 }

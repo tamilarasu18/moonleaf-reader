@@ -4,6 +4,7 @@ import '../models/book.dart';
 import '../models/user_category.dart';
 import '../services/i_book_repository.dart';
 import '../services/i_category_service.dart';
+import '../services/i_pdf_service.dart';
 import '../services/i_progress_service.dart';
 
 /// ViewModel for the library screen. Combines the catalogue with reading
@@ -13,15 +14,18 @@ class LibraryViewModel extends ChangeNotifier {
     required IBookRepository books,
     required IProgressService progress,
     required ICategoryService categories,
+    required IPdfService pdf,
   })  : _books = books,
         _progress = progress,
-        _categories = categories {
+        _categories = categories,
+        _pdf = pdf {
     refresh();
   }
 
   final IBookRepository _books;
   final IProgressService _progress;
   final ICategoryService _categories;
+  final IPdfService _pdf;
 
   List<Book> _allBooks = const [];
   List<Book> _continueReading = const [];
@@ -32,6 +36,7 @@ class LibraryViewModel extends ChangeNotifier {
 
   /// Re-reads progress and categories (call when returning from the reader).
   void refresh() {
+    _books.refresh();
     _allBooks = _books.getAll();
     _continueReading = _progress
         .inProgressBookIds()
@@ -130,5 +135,27 @@ class LibraryViewModel extends ChangeNotifier {
       String categoryId, String bookId) async {
     await _categories.removeBook(categoryId, bookId);
     notifyListeners();
+  }
+
+  // ── PDF Imports ────────────────────────────────────────────────────────
+
+  /// Import a PDF and add it to the library.
+  Future<void> importPdf(String path) async {
+    final book = await _pdf.import(path);
+    _books.addBook(book);
+    refresh();
+  }
+
+  /// Delete an imported PDF book.
+  Future<void> deletePdf(String bookId) async {
+    await _pdf.delete(bookId);
+    _books.removeBook(bookId);
+    // Also remove from any categories.
+    for (final cat in categoriesForBook(bookId)) {
+      await _categories.removeBook(cat.id, bookId);
+    }
+    // And from reading progress.
+    await _progress.clear(bookId);
+    refresh();
   }
 }

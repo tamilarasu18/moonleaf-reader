@@ -12,6 +12,7 @@ class Book {
     required this.coverGradient,
     required this.chapters,
     this.category = 'Classic',
+    this.pdfPath,
   });
 
   final String id;
@@ -21,6 +22,10 @@ class Book {
   final String category;
   final List<Color> coverGradient;
   final List<Chapter> chapters;
+  final String? pdfPath;
+
+  /// Whether this book is a PDF import (vs a chapter-based text book).
+  bool get isPdf => pdfPath != null;
 
   int get chapterCount => chapters.length;
 

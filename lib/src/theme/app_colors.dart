@@ -17,4 +17,13 @@ class AppColors {
 
   /// Gradient used for the splash and brand surfaces.
   static const List<Color> nightGradient = [Color(0xFF34345F), Color(0xFF10101F)];
+
+  /// Predefined gradients for imported PDF covers.
+  static const List<List<Color>> pdfGradients = [
+    [Color(0xFF2C3E50), Color(0xFF1A1A2E)],
+    [Color(0xFF3A506B), Color(0xFF1C2541)],
+    [Color(0xFF5C4B51), Color(0xFF2E2A30)],
+    [Color(0xFF4A5568), Color(0xFF1A202C)],
+    [Color(0xFF3D5A80), Color(0xFF1B2838)],
+  ];
 }

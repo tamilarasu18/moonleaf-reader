@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -122,7 +123,25 @@ class _LibraryViewState extends State<LibraryView>
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await FilePicker.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: ['pdf'],
+          );
+          if (result != null && result.files.single.path != null) {
+            if (context.mounted) {
+              final vm = context.read<LibraryViewModel>();
+              await vm.importPdf(result.files.single.path!);
+            }
+          }
+        },
+        icon: const Icon(Icons.picture_as_pdf_outlined),
+        label: const Text('Import PDF'),
+      ),
+      body: SafeArea(
       bottom: false,
       child: Consumer<LibraryViewModel>(
         builder: (context, vm, _) {
@@ -211,6 +230,7 @@ class _LibraryViewState extends State<LibraryView>
             ],
           );
         },
+      ),
       ),
     );
   }
