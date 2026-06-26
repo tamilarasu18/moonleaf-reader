@@ -1,0 +1,10 @@
+Moonleaf bundles the following typefaces, used under the
+SIL Open Font License, Version 1.1 (https://scripts.sil.org/OFL):
+
+  • Lora   — Copyright (c) Cyreal (cyreal.org)
+  • Inter  — Copyright (c) The Inter Project Authors (github.com/rsms/inter)
+
+The fonts are redistributed unmodified. The full OFL text is available at
+https://openfontlicense.org. These fonts may be bundled and shipped with
+applications (including commercial ones) provided they are not sold by
+themselves and this notice is retained.
