@@ -36,11 +36,20 @@ Views depend on ViewModels, ViewModels depend on service **interfaces**
 | --- | --- |
 | [`provider`](https://pub.dev/packages/provider) | State management / dependency injection across the MVVM layers. |
 | [`shared_preferences`](https://pub.dev/packages/shared_preferences) | Local persistence (theme, reading settings, progress) behind `IPreferencesService`. |
-| [`page_flip`](https://pub.dev/packages/page_flip) | The paper-curl page-turn animation. It flips page *widgets*; the app paginates chapter text into those pages itself ([`text_paginator.dart`](lib/src/utils/text_paginator.dart)). |
 | [`pdfrx`](https://pub.dev/packages/pdfrx) | Renders imported PDF pages (`PdfPageView`) in the Moonleaf-styled PDF reader. |
 | [`file_picker`](https://pub.dev/packages/file_picker) | Picking a PDF from device storage to import. |
 | [`path_provider`](https://pub.dev/packages/path_provider) | Resolving the app documents directory where imported PDFs are stored. |
 | [`cupertino_icons`](https://pub.dev/packages/cupertino_icons) | iOS-style icon glyphs. |
+
+### Custom page-curl engine
+
+The paper-curl page-turn animation is **built from scratch** in
+[`curl_page_view.dart`](lib/src/components/curl_page_view.dart) — no external
+animation package is used. Pages are snapshot to `dart:ui.Image` bitmaps
+before a flip starts, and a `CustomPainter` (`_CurlPainter`) renders all fold
+geometry, diagonal shadows, mirrored back-faces, and highlights via direct
+canvas operations. This means **zero widget rebuilds** during the 60 fps
+animation loop, giving a buttery-smooth reading experience.
 
 ## Getting started
 
