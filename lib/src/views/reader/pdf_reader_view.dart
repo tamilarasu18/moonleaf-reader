@@ -6,12 +6,16 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
 
 import '../../components/curl_page_view.dart';
+import '../../components/highlight_color_picker.dart';
+import '../../components/highlight_overlay.dart';
 import '../../components/reader_footer.dart';
+import '../../components/text_selection_overlay.dart';
 import '../../models/book.dart';
 import '../../models/reader_settings.dart';
 import '../../theme/reader_theme.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/app_viewmodel.dart';
+import '../../viewmodels/highlight_viewmodel.dart';
 import '../../viewmodels/pdf_reader_viewmodel.dart';
 
 /// Immersive PDF reader with raster-rendered pages and corner-fold page curl.
@@ -79,6 +83,9 @@ class _PdfReaderViewState extends State<PdfReaderView>
       // Pre-render the first few pages for instant display.
       final startPage = context.read<PdfReaderViewModel>().page;
       _preRenderAround(startPage);
+
+      // Load highlights for the initial page so existing highlights appear.
+      context.read<HighlightViewModel>().loadPage(startPage);
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     }
@@ -169,6 +176,10 @@ class _PdfReaderViewState extends State<PdfReaderView>
   // ── Tap-zone handler ───────────────────────────────────────────────────
 
   void _onTapUp(TapUpDetails details) {
+    // Don't handle edge-tap navigation when in highlight mode.
+    final hlVm = context.read<HighlightViewModel>();
+    if (hlVm.highlightMode) return;
+
     final width = context.size?.width ?? 1;
     final x = details.localPosition.dx;
 
@@ -216,6 +227,24 @@ class _PdfReaderViewState extends State<PdfReaderView>
               bottom: 0,
               child: _buildAnimatedFooter(rc),
             ),
+            // Color picker bar — shown when highlight mode is active.
+            Positioned(
+              top: MediaQuery.of(context).padding.top + (_chromeVisible ? kToolbarHeight : 12),
+              left: 0,
+              right: 0,
+              child: Consumer<HighlightViewModel>(
+                builder: (_, hlVm, _) {
+                  if (!hlVm.highlightMode) return const SizedBox.shrink();
+                  return Center(
+                    child: HighlightColorPicker(
+                      selectedColor: hlVm.selectedColor,
+                      onColorSelected: hlVm.setColor,
+                      onClose: hlVm.disableHighlightMode,
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -243,6 +272,21 @@ class _PdfReaderViewState extends State<PdfReaderView>
         ),
       ),
       actions: [
+        // Highlight toggle.
+        Consumer<HighlightViewModel>(
+          builder: (_, hlVm, _) => IconButton(
+            tooltip: hlVm.highlightMode ? 'Exit highlight mode' : 'Highlight text',
+            icon: Icon(
+              hlVm.highlightMode
+                  ? Icons.edit_off_rounded
+                  : Icons.edit_rounded,
+              color: hlVm.highlightMode
+                  ? hlVm.selectedColor.value.withValues(alpha: 1.0)
+                  : rc.text,
+            ),
+            onPressed: hlVm.toggleHighlightMode,
+          ),
+        ),
         IconButton(
           tooltip: 'Reading theme: ${settings.palette.label}',
           icon: Icon(settings.palette.icon),
@@ -299,6 +343,7 @@ class _PdfReaderViewState extends State<PdfReaderView>
       backgroundColor: rc.background,
       onPageChanged: (page) {
         context.read<PdfReaderViewModel>().goToPage(page);
+        context.read<HighlightViewModel>().loadPage(page);
         // Pre-render surrounding pages when the user navigates.
         _preRenderAround(page);
       },
@@ -340,9 +385,43 @@ class _PdfReaderViewState extends State<PdfReaderView>
                 ),
               ],
             ),
-            child: filter == null
-                ? pageWidget
-                : ColorFiltered(colorFilter: filter, child: pageWidget),
+            child: Stack(
+              children: [
+                // Base page widget with optional color filter.
+                filter == null
+                    ? pageWidget
+                    : ColorFiltered(colorFilter: filter, child: pageWidget),
+
+                // Highlight overlay — draws saved highlights on top.
+                Consumer<HighlightViewModel>(
+                  builder: (_, hlVm, _) {
+                    final highlights = hlVm.highlightsForPage(i);
+                    return HighlightOverlay(highlights: highlights);
+                  },
+                ),
+
+                // Text selection overlay — only when highlight mode is active.
+                Consumer<HighlightViewModel>(
+                  builder: (_, hlVm, _) {
+                    if (!hlVm.highlightMode || i >= doc.pages.length) {
+                      return const SizedBox.shrink();
+                    }
+                    return PdfTextSelectionOverlay(
+                      page: doc.pages[i],
+                      pageIndex: i,
+                      selectedColor: hlVm.selectedColor,
+                      onHighlightConfirmed: (rects, text) {
+                        hlVm.addHighlight(
+                          pageIndex: i,
+                          rects: rects,
+                          text: text,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },

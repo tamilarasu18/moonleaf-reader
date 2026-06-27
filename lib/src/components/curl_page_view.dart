@@ -95,6 +95,14 @@ class _CurlPageViewState extends State<CurlPageView>
   bool _needsSnapshot = false;
   int? _snapshotTargetPage;
 
+  // ── Pre-cached adjacent page snapshots ──────────────────────────────────
+  // After each page change, we eagerly snapshot the previous and next pages
+  // so they're instantly available when a drag starts — zero delay.
+  final Map<int, ui.Image> _adjacentCache = {};
+  final GlobalKey _preCacheBoundaryKey = GlobalKey();
+  int? _preCachingPage;
+  bool _isPreCaching = false;
+
   // Cached layout size — captured once, not inside the animation loop.
   Size _pageSize = Size.zero;
 
@@ -112,6 +120,11 @@ class _CurlPageViewState extends State<CurlPageView>
     _anim = AnimationController(vsync: this)
       ..addStatusListener(_onAnimStatus);
     widget.controller?._attach(this);
+
+    // Pre-cache adjacent pages after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preCacheAdjacentPages();
+    });
   }
 
   @override
@@ -120,6 +133,10 @@ class _CurlPageViewState extends State<CurlPageView>
     _anim.dispose();
     _currentPageSnapshot?.dispose();
     _targetPageSnapshot?.dispose();
+    for (final img in _adjacentCache.values) {
+      img.dispose();
+    }
+    _adjacentCache.clear();
     super.dispose();
   }
 
@@ -164,6 +181,89 @@ class _CurlPageViewState extends State<CurlPageView>
     }
   }
 
+  /// Try to use pre-cached snapshots first, falling back to live capture.
+  /// Returns true if snapshots are ready (from cache), false if async capture
+  /// was started and caller should wait.
+  bool _tryUseCachedSnapshots(int targetPage) {
+    // Snapshot the current page from the live widget.
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    try {
+      final currentBoundary = _currentBoundaryKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
+      if (currentBoundary != null) {
+        _currentPageSnapshot?.dispose();
+        _currentPageSnapshot = currentBoundary.toImageSync(pixelRatio: dpr);
+      }
+    } catch (_) {
+      // toImageSync may not be available; will fall back to async.
+    }
+
+    // Check if we have the target page pre-cached.
+    final cached = _adjacentCache[targetPage];
+    if (cached != null && _currentPageSnapshot != null) {
+      _targetPageSnapshot?.dispose();
+      _targetPageSnapshot = cached.clone();
+      return true;
+    }
+    return false;
+  }
+
+  // ── Pre-caching adjacent pages ─────────────────────────────────────────
+
+  /// Eagerly snapshot prev/next pages so the curl starts instantly on drag.
+  void _preCacheAdjacentPages() {
+    if (_isPreCaching || !mounted) return;
+
+    // Determine which pages to pre-cache.
+    final pagesToCache = <int>[];
+    if (_currentPage + 1 < widget.pageCount &&
+        !_adjacentCache.containsKey(_currentPage + 1)) {
+      pagesToCache.add(_currentPage + 1);
+    }
+    if (_currentPage - 1 >= 0 &&
+        !_adjacentCache.containsKey(_currentPage - 1)) {
+      pagesToCache.add(_currentPage - 1);
+    }
+
+    if (pagesToCache.isEmpty) return;
+    _preCacheSequentially(pagesToCache, 0);
+  }
+
+  /// Cache pages one at a time to avoid layout conflicts.
+  void _preCacheSequentially(List<int> pages, int index) {
+    if (index >= pages.length || !mounted || _isFlipping) return;
+    _isPreCaching = true;
+    _preCachingPage = pages[index];
+    setState(() {}); // show the off-stage pre-cache widget
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _isFlipping) {
+        _isPreCaching = false;
+        _preCachingPage = null;
+        return;
+      }
+      try {
+        final boundary = _preCacheBoundaryKey.currentContext
+            ?.findRenderObject() as RenderRepaintBoundary?;
+        if (boundary != null) {
+          final dpr = MediaQuery.of(context).devicePixelRatio;
+          final image = await boundary.toImage(pixelRatio: dpr);
+          // Dispose old cached image for this page if any.
+          _adjacentCache[pages[index]]?.dispose();
+          _adjacentCache[pages[index]] = image;
+        }
+      } catch (_) {}
+
+      _preCachingPage = null;
+      _isPreCaching = false;
+      if (mounted) {
+        setState(() {});
+        // Continue with next page.
+        _preCacheSequentially(pages, index + 1);
+      }
+    });
+  }
+
   // ── Gesture handling ─────────────────────────────────────────────────────
 
   void _onDragStart(DragStartDetails details) {
@@ -187,18 +287,22 @@ class _CurlPageViewState extends State<CurlPageView>
       _isForward = forward;
       _targetPage = target;
       _snapshotTargetPage = target;
-      _needsSnapshot = true;
 
-      // Trigger a rebuild to create the off-stage snapshot widgets,
-      // then capture them. For the drag gesture we use a synchronous
-      // approach: we show the off-stage pages for one frame, capture,
-      // then switch to painter mode.
-      setState(() {});
-      _captureSnapshots().then((_) {
-        if (mounted) {
-          setState(() => _needsSnapshot = false);
-        }
-      });
+      // Try pre-cached snapshots first for instant curl start.
+      if (_tryUseCachedSnapshots(target)) {
+        // Snapshots ready — curl starts this frame with zero delay!
+        _needsSnapshot = false;
+        setState(() {});
+      } else {
+        // Fallback: capture asynchronously (2-3 frame delay).
+        _needsSnapshot = true;
+        setState(() {});
+        _captureSnapshots().then((_) {
+          if (mounted) {
+            setState(() => _needsSnapshot = false);
+          }
+        });
+      }
     }
 
     final dragDelta = _isForward ? -delta / w : delta / w;
@@ -229,15 +333,22 @@ class _CurlPageViewState extends State<CurlPageView>
     _targetPage = target;
     _snapshotTargetPage = target;
     _fromBottom = true;
-    _needsSnapshot = true;
     _anim.value = 0.0;
 
-    setState(() {});
-    _captureSnapshots().then((_) {
-      if (!mounted || _targetPage == null) return;
-      setState(() => _needsSnapshot = false);
+    // Try pre-cached snapshots for instant start.
+    if (_tryUseCachedSnapshots(target)) {
+      _needsSnapshot = false;
+      setState(() {});
       _animateTo(1.0);
-    });
+    } else {
+      _needsSnapshot = true;
+      setState(() {});
+      _captureSnapshots().then((_) {
+        if (!mounted || _targetPage == null) return;
+        setState(() => _needsSnapshot = false);
+        _animateTo(1.0);
+      });
+    }
   }
 
   void _jumpToPage(int index) {
@@ -257,7 +368,9 @@ class _CurlPageViewState extends State<CurlPageView>
     _anim.animateTo(
       target,
       duration: widget.animationDuration * dist,
-      curve: Curves.easeOutCubic,
+      // easeOutBack gives a subtle springy overshoot that feels like
+      // a physical page settling into place.
+      curve: target >= 1.0 ? Curves.easeOutBack : Curves.easeOutCubic,
     );
   }
 
@@ -268,6 +381,13 @@ class _CurlPageViewState extends State<CurlPageView>
       widget.onPageChanged?.call(_currentPage);
     }
     _reset();
+
+    // Eagerly pre-cache adjacent pages for the new current page.
+    // This runs after the flip settles, so the next flip starts instantly.
+    _invalidateAdjacentCache();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preCacheAdjacentPages();
+    });
   }
 
   void _reset() {
@@ -281,6 +401,17 @@ class _CurlPageViewState extends State<CurlPageView>
     _targetPageSnapshot = null;
     if (!_anim.isAnimating) _anim.reset();
     setState(() {});
+  }
+
+  /// Clear cached pages that are no longer adjacent to the current page.
+  void _invalidateAdjacentCache() {
+    final keysToRemove = _adjacentCache.keys
+        .where((k) => (k - _currentPage).abs() > 1)
+        .toList();
+    for (final k in keysToRemove) {
+      _adjacentCache[k]?.dispose();
+      _adjacentCache.remove(k);
+    }
   }
 
   // ── Build ────────────────────────────────────────────────────────────────
@@ -315,6 +446,18 @@ class _CurlPageViewState extends State<CurlPageView>
                   child: RepaintBoundary(
                     key: _targetBoundaryKey,
                     child: widget.pageBuilder(ctx, _snapshotTargetPage!),
+                  ),
+                ),
+              ),
+
+            // Off-stage pre-cache widget for adjacent pages.
+            if (_preCachingPage != null)
+              Positioned.fill(
+                child: Offstage(
+                  offstage: true,
+                  child: RepaintBoundary(
+                    key: _preCacheBoundaryKey,
+                    child: widget.pageBuilder(ctx, _preCachingPage!),
                   ),
                 ),
               ),

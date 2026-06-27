@@ -5,11 +5,13 @@ import '../../components/add_to_category_sheet.dart';
 import '../../components/book_cover.dart';
 import '../../services/i_book_repository.dart';
 import '../../services/i_category_service.dart';
+import '../../services/i_highlight_service.dart';
+import '../../services/i_pdf_service.dart';
 import '../../services/i_progress_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/extensions.dart';
 import '../../viewmodels/book_detail_viewmodel.dart';
-import '../../services/i_pdf_service.dart';
+import '../../viewmodels/highlight_viewmodel.dart';
 import '../../viewmodels/pdf_reader_viewmodel.dart';
 import '../../viewmodels/reader_viewmodel.dart';
 import '../reader/pdf_reader_view.dart';
@@ -28,11 +30,21 @@ class BookDetailView extends StatelessWidget {
     if (detail.book.isPdf) {
       await Navigator.of(context).push(
         fadeThroughRoute(
-          ChangeNotifierProvider<PdfReaderViewModel>(
-            create: (ctx) => PdfReaderViewModel(
-              progress: ctx.read<IProgressService>(),
-              book: detail.book,
-            ),
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<PdfReaderViewModel>(
+                create: (ctx) => PdfReaderViewModel(
+                  progress: ctx.read<IProgressService>(),
+                  book: detail.book,
+                ),
+              ),
+              ChangeNotifierProvider<HighlightViewModel>(
+                create: (ctx) => HighlightViewModel(
+                  highlightService: ctx.read<IHighlightService>(),
+                  bookId: detail.book.id,
+                ),
+              ),
+            ],
             child: PdfReaderView(book: detail.book),
           ),
         ),
