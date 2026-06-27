@@ -21,6 +21,13 @@ class ContinueReadingCard extends StatelessWidget {
   final int chapterIndex;
   final VoidCallback onTap;
 
+  /// Imported PDFs have no chapters, so show a simple label instead of indexing
+  /// an empty chapter list.
+  String get _subtitle {
+    if (book.chapters.isEmpty) return book.isPdf ? 'PDF document' : '';
+    return book.chapters[chapterIndex.clamp(0, book.chapterCount - 1)].title;
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -55,8 +62,7 @@ class ContinueReadingCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        book.chapters[chapterIndex.clamp(0, book.chapterCount - 1)]
-                            .title,
+                        _subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: context.text.bodySmall?.copyWith(

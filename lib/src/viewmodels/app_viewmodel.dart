@@ -33,10 +33,9 @@ class AppViewModel extends ChangeNotifier {
       fontSize: _prefs.getDouble(PrefKeys.fontSize) ?? 19,
       lineHeight: _prefs.getDouble(PrefKeys.lineHeight) ?? 1.6,
       serif: _prefs.getBool(PrefKeys.serif) ?? true,
-      warmth: _prefs.getDouble(PrefKeys.warmth) ?? 0.0,
+      warmth: _prefs.getDouble(PrefKeys.warmth) ?? 0.5,
       flipStyle: PageFlipStyle.values[
           _prefs.getInt(PrefKeys.flipStyle) ?? PageFlipStyle.curl.index],
-      pageColumns: _prefs.getInt(PrefKeys.pageColumns) ?? 1,
     );
     notifyListeners();
   }
@@ -81,12 +80,6 @@ class AppViewModel extends ChangeNotifier {
   void setFlipStyle(PageFlipStyle style) {
     _update(_reader.copyWith(flipStyle: style));
     _prefs.setInt(PrefKeys.flipStyle, style.index);
-  }
-
-  void setPageColumns(int columns) {
-    final clamped = columns.clamp(1, 2);
-    _update(_reader.copyWith(pageColumns: clamped));
-    _prefs.setInt(PrefKeys.pageColumns, clamped);
   }
 
   void _update(ReaderSettings next) {

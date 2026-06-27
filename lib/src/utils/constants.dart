@@ -43,7 +43,6 @@ class PrefKeys {
   static const String serif = 'reader_serif';
   static const String warmth = 'reader_warmth';
   static const String flipStyle = 'reader_flip_style';
-  static const String pageColumns = 'reader_page_columns';
   static const String userCategories = 'user_categories';
   static const String importedPdfs = 'imported_pdfs';
   static const String progress = 'reading_progress';

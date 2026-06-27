@@ -9,9 +9,8 @@ class ReaderSettings {
     this.fontSize = 19,
     this.lineHeight = 1.6,
     this.serif = true,
-    this.warmth = 0.0,
+    this.warmth = 0.5,
     this.flipStyle = PageFlipStyle.curl,
-    this.pageColumns = 1,
   });
 
   final ReaderPalette palette;
@@ -25,9 +24,6 @@ class ReaderSettings {
   /// The page-turn animation used in the reader.
   final PageFlipStyle flipStyle;
 
-  /// Number of page columns in portrait mode (1 = single, 2 = dual spread).
-  final int pageColumns;
-
   ReaderSettings copyWith({
     ReaderPalette? palette,
     double? fontSize,
@@ -35,7 +31,6 @@ class ReaderSettings {
     bool? serif,
     double? warmth,
     PageFlipStyle? flipStyle,
-    int? pageColumns,
   }) {
     return ReaderSettings(
       palette: palette ?? this.palette,
@@ -44,7 +39,6 @@ class ReaderSettings {
       serif: serif ?? this.serif,
       warmth: warmth ?? this.warmth,
       flipStyle: flipStyle ?? this.flipStyle,
-      pageColumns: pageColumns ?? this.pageColumns,
     );
   }
 
@@ -56,10 +50,9 @@ class ReaderSettings {
       other.lineHeight == lineHeight &&
       other.serif == serif &&
       other.warmth == warmth &&
-      other.flipStyle == flipStyle &&
-      other.pageColumns == pageColumns;
+      other.flipStyle == flipStyle;
 
   @override
   int get hashCode => Object.hash(
-      palette, fontSize, lineHeight, serif, warmth, flipStyle, pageColumns);
+      palette, fontSize, lineHeight, serif, warmth, flipStyle);
 }

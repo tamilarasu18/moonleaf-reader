@@ -172,45 +172,6 @@ class _ReaderSettingsSheet extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 22),
-
-            // Page layout (portrait only).
-            Text('Page layout', style: text.labelLarge),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _FlipStyleChip(
-                    style: null,
-                    icon: Icons.article_outlined,
-                    label: 'Single',
-                    selected: settings.pageColumns == 1,
-                    onTap: () =>
-                        context.read<AppViewModel>().setPageColumns(1),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _FlipStyleChip(
-                    style: null,
-                    icon: Icons.menu_book_outlined,
-                    label: 'Dual',
-                    selected: settings.pageColumns == 2,
-                    onTap: () =>
-                        context.read<AppViewModel>().setPageColumns(2),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Works in portrait and landscape',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
           ],
           ),
         ),
@@ -273,24 +234,20 @@ class _TypeChoice extends StatelessWidget {
 
 class _FlipStyleChip extends StatelessWidget {
   const _FlipStyleChip({
-    this.style,
-    this.icon,
-    this.label,
+    required this.style,
     required this.selected,
     required this.onTap,
   });
 
-  final PageFlipStyle? style;
-  final IconData? icon;
-  final String? label;
+  final PageFlipStyle style;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final displayIcon = icon ?? style?.icon ?? Icons.help_outline;
-    final displayLabel = label ?? style?.label ?? '';
+    final displayIcon = style.icon;
+    final displayLabel = style.label;
 
     return InkWell(
       onTap: onTap,

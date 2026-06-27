@@ -10,6 +10,7 @@ import '../../utils/constants.dart';
 import '../../utils/extensions.dart';
 import '../../viewmodels/book_detail_viewmodel.dart';
 import '../../services/i_pdf_service.dart';
+import '../../viewmodels/pdf_reader_viewmodel.dart';
 import '../../viewmodels/reader_viewmodel.dart';
 import '../reader/pdf_reader_view.dart';
 import '../reader/reader_view.dart';
@@ -21,10 +22,20 @@ class BookDetailView extends StatelessWidget {
 
   Future<void> _openReader(BuildContext context, {int? chapter}) async {
     final detail = context.read<BookDetailViewModel>();
-    
+
+    // Imported PDFs render their original pages in the Moonleaf-styled PDF
+    // reader; chapter-based text books use the text reader.
     if (detail.book.isPdf) {
       await Navigator.of(context).push(
-        fadeThroughRoute(PdfReaderView(book: detail.book)),
+        fadeThroughRoute(
+          ChangeNotifierProvider<PdfReaderViewModel>(
+            create: (ctx) => PdfReaderViewModel(
+              progress: ctx.read<IProgressService>(),
+              book: detail.book,
+            ),
+            child: PdfReaderView(book: detail.book),
+          ),
+        ),
       );
     } else {
       await Navigator.of(context).push(

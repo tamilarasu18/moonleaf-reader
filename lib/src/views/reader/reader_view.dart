@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../components/page_turner.dart';
+import '../../components/reader_footer.dart';
 import '../../models/reader_settings.dart';
 
 import '../../components/reader_settings_sheet.dart';
@@ -14,14 +15,9 @@ import '../../utils/text_paginator.dart';
 import '../../viewmodels/app_viewmodel.dart';
 import '../../viewmodels/reader_viewmodel.dart';
 
-/// The reading surface. Supports three layout modes:
-///
-///  • **Portrait single-page** — one page at a time, turned with the selected
-///    flip animation ([PageTurner]).
-///  • **Portrait dual-page** — two pages side-by-side (book spread), each
-///    paginated to half the available width.
-///  • **Landscape scroll** — the full chapter text in a vertical
-///    [SingleChildScrollView] so no content is clipped by the narrow height.
+/// The reading surface. Shows one page at a time, turned with the selected
+/// flip animation ([PageTurner]). Body text scrolls within a page when large
+/// font / line-height settings overflow the available height.
 ///
 /// Progress persistence stays chapter-based via [ReaderViewModel].
 class ReaderView extends StatefulWidget {
@@ -31,7 +27,8 @@ class ReaderView extends StatefulWidget {
   State<ReaderView> createState() => _ReaderViewState();
 }
 
-class _ReaderViewState extends State<ReaderView> {
+class _ReaderViewState extends State<ReaderView>
+    with SingleTickerProviderStateMixin {
   static const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(26, 14, 26, 14);
 
   // Tiny slack subtracted from each page's height budget so a page that fills
@@ -51,6 +48,38 @@ class _ReaderViewState extends State<ReaderView> {
   String _chapterKey = '';
   int _page = 0;
   bool _landOnLastPage = false;
+
+  // ── Full-view (immersive) mode ──────────────────────────────────────────
+  bool _isFullView = false;
+  late final AnimationController _fullViewAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullViewAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+  }
+
+  @override
+  void dispose() {
+    _fullViewAnim.dispose();
+    // Restore system UI on exit in case we're in full-view mode.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  void _toggleFullView() {
+    setState(() => _isFullView = !_isFullView);
+    if (_isFullView) {
+      _fullViewAnim.forward();
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      _fullViewAnim.reverse();
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+  }
 
   void _showToc(ReaderViewModel vm) {
     showModalBottomSheet<void>(
@@ -137,7 +166,7 @@ class _ReaderViewState extends State<ReaderView> {
       final heading = _headingHeight(vm, width, titleStyle, labelStyle, scaler);
       // Pack pages to slightly less than the real box: TextPainter line metrics
       // and the live render can disagree by a sub-pixel (leading rounding, text
-      // scaler, page_flip's own sizing), which otherwise surfaces as a tiny
+      // scaler, CurlPageView's own sizing), which otherwise surfaces as a tiny
       // RenderFlex overflow on an otherwise-full page.
       final pageHeight = height - _pageSafetyMargin;
       _pages = TextPaginator.paginate(
@@ -213,30 +242,6 @@ class _ReaderViewState extends State<ReaderView> {
     }
   }
 
-  // ── Dual-page helpers ───────────────────────────────────────────────────
-
-  void _onNextDual(ReaderViewModel vm) {
-    final step = 2;
-    if (_page + step < _pages.length) {
-      // Advance the pair by 2.
-      setState(() => _page += step);
-    } else if (vm.canGoNext) {
-      _landOnLastPage = false;
-      vm.next();
-    }
-  }
-
-  void _onPreviousDual(ReaderViewModel vm) {
-    if (_page >= 2) {
-      setState(() => _page -= 2);
-    } else if (_page > 0) {
-      setState(() => _page = 0);
-    } else if (vm.canGoPrevious) {
-      _landOnLastPage = true;
-      vm.previous();
-    }
-  }
-
   // ── Build ───────────────────────────────────────────────────────────────
 
   @override
@@ -272,35 +277,43 @@ class _ReaderViewState extends State<ReaderView> {
       value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: rc.background,
-        appBar: AppBar(
-          backgroundColor: rc.background,
-          foregroundColor: rc.text,
-          iconTheme: IconThemeData(color: rc.text),
-          actionsIconTheme: IconThemeData(color: rc.text),
-          title: Text(
-            vm.book.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: rc.text,
-              fontFamily: AppConstants.fontReading,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Chapters',
-              icon: const Icon(Icons.toc),
-              onPressed: () => _showToc(vm),
-            ),
-            IconButton(
-              tooltip: 'Display settings',
-              icon: const Icon(Icons.format_size),
-              onPressed: () => showReaderSettingsSheet(context),
-            ),
-          ],
-        ),
+        extendBodyBehindAppBar: true,
+        appBar: _isFullView
+            ? null
+            : AppBar(
+                backgroundColor: rc.background,
+                foregroundColor: rc.text,
+                iconTheme: IconThemeData(color: rc.text),
+                actionsIconTheme: IconThemeData(color: rc.text),
+                title: Text(
+                  vm.book.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: rc.text,
+                    fontFamily: AppConstants.fontReading,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                actions: [
+                  IconButton(
+                    tooltip: 'Full view',
+                    icon: const Icon(Icons.fullscreen),
+                    onPressed: _toggleFullView,
+                  ),
+                  IconButton(
+                    tooltip: 'Chapters',
+                    icon: const Icon(Icons.toc),
+                    onPressed: () => _showToc(vm),
+                  ),
+                  IconButton(
+                    tooltip: 'Display settings',
+                    icon: const Icon(Icons.format_size),
+                    onPressed: () => showReaderSettingsSheet(context),
+                  ),
+                ],
+              ),
         body: OrientationBuilder(
           builder: (context, orientation) {
             return _buildPaginated(vm, rc, settings, bodyStyle, titleStyle,
@@ -311,7 +324,7 @@ class _ReaderViewState extends State<ReaderView> {
     );
   }
 
-  // ── Paginated layout (single or dual, any orientation) ──────────────────
+  // ── Paginated layout (any orientation) ──────────────────────────────────
 
   Widget _buildPaginated(
     ReaderViewModel vm,
@@ -322,177 +335,114 @@ class _ReaderViewState extends State<ReaderView> {
     TextStyle labelStyle,
     TextScaler scaler,
   ) {
-    final isDual = settings.pageColumns == 2;
-
     return Column(
       children: [
+        // Spacer for the AppBar when not in full-view mode.
+        if (!_isFullView)
+          SizedBox(
+            height: MediaQuery.of(context).padding.top + kToolbarHeight,
+          ),
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // For dual-page, each column gets half the width minus a gap.
-              final columnWidth = isDual
-                  ? (constraints.maxWidth / 2) - _pagePadding.horizontal
-                  : constraints.maxWidth - _pagePadding.horizontal;
-              final height = constraints.maxHeight - _pagePadding.vertical;
+          child: GestureDetector(
+            // Tap the centre zone to toggle full-view mode.
+            onTap: () {
+              _toggleFullView();
+            },
+            behavior: HitTestBehavior.translucent,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth - _pagePadding.horizontal;
+                final height = constraints.maxHeight - _pagePadding.vertical;
 
-              // Layout signature that forces re-pagination.
-              final layoutSig = '${columnWidth.round()}|${height.round()}|'
-                  '${settings.fontSize}|${settings.lineHeight}|'
-                  '${settings.serif}|${scaler.scale(1000).round()}|'
-                  '${settings.pageColumns}';
+                // Layout signature that forces re-pagination.
+                final layoutSig = '${width.round()}|${height.round()}|'
+                    '${settings.fontSize}|${settings.lineHeight}|'
+                    '${settings.serif}|${scaler.scale(1000).round()}';
 
-              final pages = _ensurePages(
-                vm: vm,
-                width: columnWidth,
-                height: height,
-                bodyStyle: bodyStyle,
-                titleStyle: titleStyle,
-                labelStyle: labelStyle,
-                scaler: scaler,
-                layoutSig: layoutSig,
-              );
-
-              // Reset the visible page on chapter change.
-              final chapterKey = '${vm.book.id}|${vm.chapterIndex}';
-              if (chapterKey != _chapterKey) {
-                _chapterKey = chapterKey;
-                _page = _landOnLastPage ? pages.length - 1 : 0;
-                _landOnLastPage = false;
-                // For dual-page, snap to even page index.
-                if (isDual && _page.isOdd && _page > 0) _page--;
-              }
-              _page = _page.clamp(0, pages.length - 1);
-
-              if (isDual) {
-                return _buildDualPageSpread(
-                  pages: pages,
+                final pages = _ensurePages(
                   vm: vm,
-                  rc: rc,
+                  width: width,
+                  height: height,
                   bodyStyle: bodyStyle,
                   titleStyle: titleStyle,
                   labelStyle: labelStyle,
-                  chapterKey: chapterKey,
+                  scaler: scaler,
                   layoutSig: layoutSig,
-                  settings: settings,
                 );
-              }
 
-              return PageTurner(
-                key: ValueKey(
-                  '$chapterKey|$layoutSig|${settings.palette}'
-                  '|${settings.warmth}|${settings.flipStyle}',
-                ),
-                style: settings.flipStyle,
-                controller: _flip,
-                backgroundColor: rc.background,
-                initialIndex: _page,
-                onPageChanged: (p) => setState(() => _page = p),
-                children: [
-                  for (var i = 0; i < pages.length; i++)
-                    _pageContent(
-                      index: i,
-                      vm: vm,
-                      rc: rc,
-                      bodyStyle: bodyStyle,
-                      titleStyle: titleStyle,
-                      labelStyle: labelStyle,
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        _buildFooter(vm, rc, isDual),
-      ],
-    );
-  }
+                // Reset the visible page on chapter change.
+                final chapterKey = '${vm.book.id}|${vm.chapterIndex}';
+                if (chapterKey != _chapterKey) {
+                  _chapterKey = chapterKey;
+                  _page = _landOnLastPage ? pages.length - 1 : 0;
+                  _landOnLastPage = false;
+                }
+                _page = _page.clamp(0, pages.length - 1);
 
-  // ── Dual-page spread ────────────────────────────────────────────────────
-
-  Widget _buildDualPageSpread({
-    required List<String> pages,
-    required ReaderViewModel vm,
-    required ReaderColors rc,
-    required TextStyle bodyStyle,
-    required TextStyle titleStyle,
-    required TextStyle labelStyle,
-    required String chapterKey,
-    required String layoutSig,
-    required ReaderSettings settings,
-  }) {
-    final leftIdx = _page;
-    final rightIdx = _page + 1 < pages.length ? _page + 1 : null;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (d) {
-        final v = d.primaryVelocity ?? 0;
-        if (v < -200) {
-          _onNextDual(vm);
-        } else if (v > 200) {
-          _onPreviousDual(vm);
-        }
-      },
-      child: Row(
-        children: [
-          // Left page.
-          Expanded(
-            child: _pageContent(
-              index: leftIdx,
-              vm: vm,
-              rc: rc,
-              bodyStyle: bodyStyle,
-              titleStyle: titleStyle,
-              labelStyle: labelStyle,
+                return PageTurner(
+                  key: ValueKey(
+                    '$chapterKey|$layoutSig|${settings.palette}'
+                    '|${settings.warmth}|${settings.flipStyle}',
+                  ),
+                  style: settings.flipStyle,
+                  controller: _flip,
+                  backgroundColor: rc.background,
+                  initialIndex: _page,
+                  onPageChanged: (p) => setState(() => _page = p),
+                  children: [
+                    for (var i = 0; i < pages.length; i++)
+                      RepaintBoundary(
+                        child: _pageContent(
+                          index: i,
+                          vm: vm,
+                          rc: rc,
+                          bodyStyle: bodyStyle,
+                          titleStyle: titleStyle,
+                          labelStyle: labelStyle,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
-          // Thin divider between pages.
-          Container(
-            width: 1,
-            color: rc.faint.withValues(alpha: 0.18),
-          ),
-          // Right page (or empty).
-          Expanded(
-            child: rightIdx != null
-                ? _pageContent(
-                    index: rightIdx,
-                    vm: vm,
-                    rc: rc,
-                    bodyStyle: bodyStyle,
-                    titleStyle: titleStyle,
-                    labelStyle: labelStyle,
-                  )
-                : ColoredBox(color: rc.background, child: const SizedBox.expand()),
-          ),
-        ],
-      ),
+        ),
+        // Animated footer — slides down and fades out in full-view.
+        AnimatedBuilder(
+          animation: _fullViewAnim,
+          builder: (context, child) {
+            final t = _fullViewAnim.value;
+            return ClipRect(
+              child: Align(
+                alignment: Alignment.topCenter,
+                heightFactor: 1.0 - t,
+                child: Opacity(
+                  opacity: 1.0 - t,
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: _buildFooter(vm, rc),
+        ),
+      ],
     );
   }
 
   // ── Footer ──────────────────────────────────────────────────────────────
 
-  Widget _buildFooter(ReaderViewModel vm, ReaderColors rc, bool isDual) {
-    final String label;
-    if (isDual) {
-      final rightIdx = _page + 1 < _pages.length ? _page + 1 : null;
-      final pageLabel = rightIdx != null
-          ? 'Pages ${_page + 1}–${rightIdx + 1} of ${_pages.length}'
-          : 'Page ${_page + 1} of ${_pages.length}';
-      label = '$pageLabel  ·  '
-          'Chapter ${vm.chapterIndex + 1} of ${vm.chapterCount}';
-    } else {
-      label = 'Page ${_page + 1} of ${_pages.length}  ·  '
-          'Chapter ${vm.chapterIndex + 1} of ${vm.chapterCount}';
-    }
+  Widget _buildFooter(ReaderViewModel vm, ReaderColors rc) {
+    final label = 'Page ${_page + 1} of ${_pages.length}  ·  '
+        'Chapter ${vm.chapterIndex + 1} of ${vm.chapterCount}';
 
-    return _ReaderFooter(
+    return ReaderFooter(
       colors: rc,
       progress: _displayProgress(vm),
       label: label,
       canPrevious: vm.chapterIndex > 0 || _page > 0,
       canNext: vm.canGoNext || _page < _pages.length - 1,
-      onPrevious: isDual ? () => _onPreviousDual(vm) : () => _onPrevious(vm),
-      onNext: isDual ? () => _onNextDual(vm) : () => _onNext(vm),
+      onPrevious: () => _onPrevious(vm),
+      onNext: () => _onNext(vm),
     );
   }
 
@@ -501,72 +451,5 @@ class _ReaderViewState extends State<ReaderView> {
         _pages.length <= 1 ? 1.0 : (_page + 1) / _pages.length;
     if (vm.chapterCount <= 1) return pageFraction;
     return ((vm.chapterIndex + pageFraction) / vm.chapterCount).clamp(0.0, 1.0);
-  }
-}
-
-class _ReaderFooter extends StatelessWidget {
-  const _ReaderFooter({
-    required this.colors,
-    required this.progress,
-    required this.label,
-    required this.canPrevious,
-    required this.canNext,
-    required this.onPrevious,
-    required this.onNext,
-  });
-
-  final ReaderColors colors;
-  final double progress;
-  final String label;
-  final bool canPrevious;
-  final bool canNext;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: colors.surface,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            LinearProgressIndicator(
-              value: progress,
-              minHeight: 3,
-              backgroundColor: colors.surface,
-              color: const Color(0xFFE6BE72),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    color: colors.text,
-                    disabledColor: colors.faint.withValues(alpha: 0.4),
-                    onPressed: canPrevious ? onPrevious : null,
-                  ),
-                  Expanded(
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: colors.faint, fontSize: 13),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    color: colors.text,
-                    disabledColor: colors.faint.withValues(alpha: 0.4),
-                    onPressed: canNext ? onNext : null,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

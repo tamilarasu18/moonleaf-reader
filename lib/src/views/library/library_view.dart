@@ -299,12 +299,20 @@ class _LibraryViewState extends State<LibraryView>
 
   Widget _buildSpotlight(BuildContext context, LibraryViewModel vm) {
     final book = vm.continueReading.first;
-    final chapterIdx = vm.chapterIndexFor(book);
-    final chapter = book.chapters[chapterIdx.clamp(0, book.chapterCount - 1)];
+
+    // Imported PDFs have no chapters — show a simple label instead of indexing
+    // an empty chapter list.
+    final String badge;
+    if (book.chapters.isEmpty) {
+      badge = book.isPdf ? 'PDF document' : '';
+    } else {
+      final chapterIdx = vm.chapterIndexFor(book).clamp(0, book.chapterCount - 1);
+      badge = book.chapters[chapterIdx].title;
+    }
 
     return ReadingSpotlight(
       book: book,
-      chapterTitle: chapter.title,
+      chapterTitle: badge,
       onTap: () => _openBook(context, book),
     );
   }

@@ -10,6 +10,7 @@ import 'i_pdf_service.dart';
 import 'i_preferences_service.dart';
 
 /// Manages PDF imports: copies files to app storage, persists metadata as JSON.
+/// The pages themselves are rendered on demand from the file by the PDF reader.
 class PdfService implements IPdfService {
   PdfService(this._prefs) {
     _load();

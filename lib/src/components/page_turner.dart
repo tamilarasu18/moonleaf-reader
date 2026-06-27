@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:page_flip/page_flip.dart';
+
+import 'curl_page_view.dart';
 
 /// The visual transition used when turning a page in the reader.
 enum PageFlipStyle {
@@ -49,8 +50,8 @@ class PageTurner extends StatefulWidget {
 }
 
 class _PageTurnerState extends State<PageTurner> {
-  // Curl mode delegates.
-  late PageFlipController _flipCtrl;
+  // Curl mode delegate.
+  late CurlPageController _curlCtrl;
 
   // Slide mode delegate.
   late PageController _pageCtrl;
@@ -63,7 +64,7 @@ class _PageTurnerState extends State<PageTurner> {
     super.initState();
     _currentIndex = widget.initialIndex;
     widget.controller._attach(this);
-    _flipCtrl = PageFlipController();
+    _curlCtrl = CurlPageController();
     _pageCtrl = PageController(initialPage: widget.initialIndex);
   }
 
@@ -79,7 +80,7 @@ class _PageTurnerState extends State<PageTurner> {
     if (_currentIndex >= widget.children.length - 1) return;
     switch (widget.style) {
       case PageFlipStyle.curl:
-        _flipCtrl.nextPage();
+        _curlCtrl.flipNext();
       case PageFlipStyle.slide:
         _pageCtrl.nextPage(
           duration: const Duration(milliseconds: 350),
@@ -98,7 +99,7 @@ class _PageTurnerState extends State<PageTurner> {
     if (_currentIndex <= 0) return;
     switch (widget.style) {
       case PageFlipStyle.curl:
-        _flipCtrl.previousPage();
+        _curlCtrl.flipPrev();
       case PageFlipStyle.slide:
         _pageCtrl.previousPage(
           duration: const Duration(milliseconds: 350),
@@ -126,22 +127,24 @@ class _PageTurnerState extends State<PageTurner> {
   }
 
   Widget _buildCurl() {
-    return PageFlipWidget(
+    return CurlPageView(
       key: ValueKey('curl_${widget.children.length}'),
-      controller: _flipCtrl,
+      controller: _curlCtrl,
       backgroundColor: widget.backgroundColor,
-      initialIndex: widget.initialIndex,
-      onPageFlipped: (p) {
+      initialPage: widget.initialIndex,
+      pageCount: widget.children.length,
+      pageBuilder: (_, i) => widget.children[i],
+      onPageChanged: (p) {
         _currentIndex = p;
         widget.onPageChanged(p);
       },
-      children: widget.children,
     );
   }
 
   Widget _buildSlide() {
     return PageView.builder(
       controller: _pageCtrl,
+      physics: const ClampingScrollPhysics(),
       itemCount: widget.children.length,
       onPageChanged: (p) {
         _currentIndex = p;
@@ -153,7 +156,7 @@ class _PageTurnerState extends State<PageTurner> {
 
   Widget _buildFade() {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 200),
       switchInCurve: Curves.easeIn,
       switchOutCurve: Curves.easeOut,
       child: KeyedSubtree(

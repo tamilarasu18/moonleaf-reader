@@ -1,9 +1,8 @@
-import '../data/sample_books.dart';
 import '../models/book.dart';
 import 'i_book_repository.dart';
 import 'i_pdf_service.dart';
 
-/// In-memory repository merging bundled sample books with imported PDFs.
+/// In-memory repository serving only imported PDFs.
 ///
 /// Replace/extend this with a real source (local EPUB import, an API, etc.)
 /// without changing any ViewModel — they depend only on [IBookRepository].
@@ -11,17 +10,17 @@ class BookRepository implements IBookRepository {
   BookRepository({
     List<Book>? books,
     required IPdfService pdfService,
-  })  : _sampleBooks = books ?? sampleBooks,
+  })  : _seedBooks = books ?? const [],
         _pdfService = pdfService {
     _rebuildList();
   }
 
-  final List<Book> _sampleBooks;
+  final List<Book> _seedBooks;
   final IPdfService _pdfService;
   List<Book> _allBooks = [];
 
   void _rebuildList() {
-    _allBooks = [..._sampleBooks, ..._pdfService.getImportedBooks()];
+    _allBooks = [..._seedBooks, ..._pdfService.getImportedBooks()];
   }
 
   @override

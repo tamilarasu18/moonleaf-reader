@@ -81,3 +81,26 @@ class ReaderColors {
   Brightness get brightness =>
       ThemeData.estimateBrightnessForColor(background);
 }
+
+/// The colour filter applied to a rendered PDF page so it adopts the active
+/// reading palette: **Light** leaves the page untouched (full originality),
+/// **Sepia** warms the paper to a cream tone, and **Night** inverts it into a
+/// dark reading surface. Returns null when no filtering is needed.
+ColorFilter? readerPageColorFilter(ReaderPalette palette) {
+  switch (palette) {
+    case ReaderPalette.light:
+      return null;
+    case ReaderPalette.sepia:
+      // Multiply by a warm cream: white paper becomes sepia while dark text and
+      // images keep their contrast.
+      return const ColorFilter.mode(Color(0xFFF1E2C0), BlendMode.multiply);
+    case ReaderPalette.dark:
+      // Invert luminance so the white page reads as near-black with light text.
+      return const ColorFilter.matrix(<double>[
+        -1, 0, 0, 0, 255, //
+        0, -1, 0, 0, 255, //
+        0, 0, -1, 0, 255, //
+        0, 0, 0, 1, 0, //
+      ]);
+  }
+}
