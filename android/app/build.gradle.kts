@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         // Unique Play Store Application ID for Moonleaf.
-        applicationId = "com.moonleaf.reader"
+        applicationId = "com.moonleaf.moonleaf"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
