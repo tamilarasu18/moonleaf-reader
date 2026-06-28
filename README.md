@@ -18,7 +18,11 @@
   PDF reader: the **original pages are rendered as-is** (layout, fonts and images
   preserved), one per screen, on the chosen palette/warmth surface with the same
   progress footer and page controls as the bundled books. Your place is
-  remembered per PDF.
+  remembered per PDF. Page count and estimated reading time (~2 min/page) are
+  calculated automatically on import.
+- 📚 **Collections** — organise imported PDFs into user-created collections.
+  Assign a collection during import, or move a PDF between collections later
+  from the book detail screen. Create new collections inline at any point.
 - 🔖 **Progress** — your place is remembered per book and surfaced in
   "Continue reading".
 
