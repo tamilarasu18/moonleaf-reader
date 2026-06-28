@@ -215,10 +215,21 @@ class _PdfReaderViewState extends State<PdfReaderView>
         body: Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapUp: _onTapUp,
-                child: _buildBody(settings.palette, rc),
+              child: Selector<HighlightViewModel, bool>(
+                selector: (_, vm) => vm.highlightMode,
+                builder: (_, inHighlightMode, _) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    // Disable tap navigation when in highlight mode so it
+                    // doesn't compete with the text-selection long-press.
+                    onTapUp: inHighlightMode ? null : _onTapUp,
+                    child: _buildBody(
+                      settings.palette,
+                      rc,
+                      highlightMode: inHighlightMode,
+                    ),
+                  );
+                },
               ),
             ),
             Positioned(
@@ -303,7 +314,11 @@ class _PdfReaderViewState extends State<PdfReaderView>
 
   // ── Body ───────────────────────────────────────────────────────────────
 
-  Widget _buildBody(ReaderPalette palette, ReaderColors rc) {
+  Widget _buildBody(
+    ReaderPalette palette,
+    ReaderColors rc, {
+    bool highlightMode = false,
+  }) {
     if (_failed) {
       return Center(
         child: Padding(
@@ -336,11 +351,14 @@ class _PdfReaderViewState extends State<PdfReaderView>
     final pageCount = doc.pages.length;
     final filter = readerPageColorFilter(palette);
 
+    // When highlight mode is active, prevent CurlPageView's horizontal drag
+    // recogniser from stealing gestures from the text-selection long-press.
     return CurlPageView(
       controller: _curlController,
       pageCount: pageCount,
       initialPage: context.read<PdfReaderViewModel>().page,
       backgroundColor: rc.background,
+      gesturesEnabled: !highlightMode,
       onPageChanged: (page) {
         context.read<PdfReaderViewModel>().goToPage(page);
         context.read<HighlightViewModel>().loadPage(page);
@@ -393,7 +411,10 @@ class _PdfReaderViewState extends State<PdfReaderView>
                     : ColorFiltered(colorFilter: filter, child: pageWidget),
 
                 // Highlight overlay — draws saved highlights on top.
+                // Stable key prevents Flutter from misidentifying this
+                // widget when the text-selection sibling appears/disappears.
                 Consumer<HighlightViewModel>(
+                  key: const ValueKey('highlight_overlay'),
                   builder: (_, hlVm, _) {
                     final highlights = hlVm.highlightsForPage(i);
                     return HighlightOverlay(highlights: highlights);
@@ -402,6 +423,7 @@ class _PdfReaderViewState extends State<PdfReaderView>
 
                 // Text selection overlay — only when highlight mode is active.
                 Consumer<HighlightViewModel>(
+                  key: const ValueKey('text_selection'),
                   builder: (_, hlVm, _) {
                     if (!hlVm.highlightMode || i >= doc.pages.length) {
                       return const SizedBox.shrink();

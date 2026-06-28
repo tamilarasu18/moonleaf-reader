@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import '../models/book.dart';
 import '../theme/app_colors.dart';
@@ -53,7 +54,7 @@ class PdfService implements IPdfService {
   // ── IPdfService ───────────────────────────────────────────────────────
 
   @override
-  Future<Book> import(String sourcePath) async {
+  Future<Book> import(String sourcePath, {String? category}) async {
     final source = File(sourcePath);
     final dir = await _pdfDir();
 
@@ -67,6 +68,16 @@ class PdfService implements IPdfService {
 
     // Copy file.
     await source.copy(destPath);
+
+    // Get page count from the PDF.
+    int pages = 0;
+    try {
+      final doc = await PdfDocument.openFile(destPath);
+      pages = doc.pages.length;
+      doc.dispose();
+    } catch (_) {
+      // If we can't read the PDF, default to 0.
+    }
 
     // Build metadata.
     final title = originalName
@@ -82,6 +93,8 @@ class PdfService implements IPdfService {
       filePath: destPath,
       gradientIndex: gradientIndex,
       importedAt: timestamp,
+      category: category ?? 'Imported',
+      pageCount: pages,
     );
 
     _imported.add(meta);
@@ -122,9 +135,27 @@ class PdfService implements IPdfService {
       synopsis: 'Imported PDF document.',
       coverGradient: gradient,
       chapters: const [],
-      category: 'Imported',
+      category: meta.category,
       pdfPath: meta.filePath,
+      pageCount: meta.pageCount,
     );
+  }
+
+  @override
+  Future<void> updateCategory(String bookId, String category) async {
+    final idx = _imported.indexWhere((m) => m.id == bookId);
+    if (idx == -1) return;
+    final old = _imported[idx];
+    _imported[idx] = _PdfMeta(
+      id: old.id,
+      title: old.title,
+      filePath: old.filePath,
+      gradientIndex: old.gradientIndex,
+      importedAt: old.importedAt,
+      category: category,
+      pageCount: old.pageCount,
+    );
+    await _persist();
   }
 }
 
@@ -136,6 +167,8 @@ class _PdfMeta {
     required this.filePath,
     required this.gradientIndex,
     required this.importedAt,
+    this.category = 'Imported',
+    this.pageCount = 0,
   });
 
   final String id;
@@ -143,6 +176,8 @@ class _PdfMeta {
   final String filePath;
   final int gradientIndex;
   final int importedAt;
+  final String category;
+  final int pageCount;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -150,6 +185,8 @@ class _PdfMeta {
         'filePath': filePath,
         'gradientIndex': gradientIndex,
         'importedAt': importedAt,
+        'category': category,
+        'pageCount': pageCount,
       };
 
   factory _PdfMeta.fromJson(Map<String, dynamic> json) => _PdfMeta(
@@ -158,5 +195,7 @@ class _PdfMeta {
         filePath: json['filePath'] as String,
         gradientIndex: (json['gradientIndex'] as num).toInt(),
         importedAt: (json['importedAt'] as num).toInt(),
+        category: json['category'] as String? ?? 'Imported',
+        pageCount: (json['pageCount'] as num?)?.toInt() ?? 0,
       );
 }

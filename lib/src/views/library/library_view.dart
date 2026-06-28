@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../components/bookshelf_row.dart';
+import '../../components/collection_picker_sheet.dart';
 import '../../components/manage_categories_sheet.dart';
 import '../../components/moon_logo.dart';
 import '../../components/reading_spotlight.dart';
 import '../../models/book.dart';
+import '../../services/i_book_repository.dart';
 import '../../services/i_progress_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/extensions.dart';
@@ -110,6 +112,7 @@ class _LibraryViewState extends State<LibraryView>
         ChangeNotifierProvider<BookDetailViewModel>(
           create: (ctx) => BookDetailViewModel(
             book: book,
+            books: ctx.read<IBookRepository>(),
             progress: ctx.read<IProgressService>(),
           ),
           child: const BookDetailView(),
@@ -125,22 +128,7 @@ class _LibraryViewState extends State<LibraryView>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await FilePicker.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['pdf'],
-          );
-          if (result != null && result.files.single.path != null) {
-            if (context.mounted) {
-              final vm = context.read<LibraryViewModel>();
-              await vm.importPdf(result.files.single.path!);
-            }
-          }
-        },
-        icon: const Icon(Icons.picture_as_pdf_outlined),
-        label: const Text('Import PDF'),
-      ),
+      floatingActionButton: _buildImportFab(context),
       body: SafeArea(
       bottom: false,
       child: Consumer<LibraryViewModel>(
@@ -324,5 +312,91 @@ class _LibraryViewState extends State<LibraryView>
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
+  }
+
+  // ── Import PDF FAB ─────────────────────────────────────────────────────
+
+  Widget _buildImportFab(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: () async {
+        final result = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf'],
+        );
+        if (result == null || result.files.single.path == null) return;
+        if (!context.mounted) return;
+
+        final filePath = result.files.single.path!;
+
+        // Show collection picker before importing.
+        final pickedCategory = await showCollectionPickerSheet(context);
+        // User dismissed the sheet entirely (tapped outside) — cancel import.
+        if (pickedCategory == null && !context.mounted) return;
+
+        if (context.mounted) {
+          final vm = context.read<LibraryViewModel>();
+          // Pass the collection name as the genre category so the PDF
+          // only appears under that shelf (not under both "Imported" + shelf).
+          await vm.importPdf(
+            filePath,
+            category: (pickedCategory != null && pickedCategory.isNotEmpty)
+                ? pickedCategory
+                : null,
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF3A3A6A), const Color(0xFF1E1E3F)]
+                : [scheme.primary, scheme.primary.withValues(alpha: 0.85)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? const Color(0xFFE6BE72).withValues(alpha: 0.18)
+                  : scheme.primary.withValues(alpha: 0.30),
+              blurRadius: 16,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.20),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.picture_as_pdf_rounded,
+              size: 20,
+              color: isDark ? const Color(0xFFE6BE72) : Colors.white,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Import PDF',
+              style: TextStyle(
+                fontFamily: AppConstants.fontUi,
+                fontWeight: FontWeight.w600,
+                fontSize: 14.5,
+                color: isDark ? const Color(0xFFF4E9C9) : Colors.white,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

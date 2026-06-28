@@ -140,8 +140,9 @@ class LibraryViewModel extends ChangeNotifier {
   // ── PDF Imports ────────────────────────────────────────────────────────
 
   /// Import a PDF and add it to the library.
-  Future<void> importPdf(String path) async {
-    final book = await _pdf.import(path);
+  /// If [category] is provided, the book's genre shelf is set to that name.
+  Future<void> importPdf(String path, {String? category}) async {
+    final book = await _pdf.import(path, category: category);
     _books.addBook(book);
     refresh();
   }
@@ -156,6 +157,20 @@ class LibraryViewModel extends ChangeNotifier {
     }
     // And from reading progress.
     await _progress.clear(bookId);
+    refresh();
+  }
+
+  /// Move a PDF to a different collection (updates its genre shelf category).
+  Future<void> movePdfToCategory(String bookId, String newCategory) async {
+    await _pdf.updateCategory(bookId, newCategory);
+    // Refresh the in-memory book list to reflect the new category.
+    _books.removeBook(bookId);
+    for (final book in _pdf.getImportedBooks()) {
+      if (book.id == bookId) {
+        _books.addBook(book);
+        break;
+      }
+    }
     refresh();
   }
 }

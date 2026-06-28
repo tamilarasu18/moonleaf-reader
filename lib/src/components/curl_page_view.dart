@@ -49,6 +49,7 @@ class CurlPageView extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.initialPage = 0,
     this.animationDuration = const Duration(milliseconds: 350),
+    this.gesturesEnabled = true,
   });
 
   final int pageCount;
@@ -58,6 +59,11 @@ class CurlPageView extends StatefulWidget {
   final Color backgroundColor;
   final int initialPage;
   final Duration animationDuration;
+
+  /// When false, horizontal drag gestures for page-curl are disabled.
+  /// Useful when a child widget (e.g. text selection overlay) needs to
+  /// handle its own gestures without interference.
+  final bool gesturesEnabled;
 
   @override
   State<CurlPageView> createState() => _CurlPageViewState();
@@ -425,9 +431,9 @@ class _CurlPageViewState extends State<CurlPageView>
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: _onDragStart,
-        onHorizontalDragUpdate: _onDragUpdate,
-        onHorizontalDragEnd: _onDragEnd,
+        onHorizontalDragStart: widget.gesturesEnabled ? _onDragStart : null,
+        onHorizontalDragUpdate: widget.gesturesEnabled ? _onDragUpdate : null,
+        onHorizontalDragEnd: widget.gesturesEnabled ? _onDragEnd : null,
         child: Stack(
           children: [
             // The static current page (always visible underneath).

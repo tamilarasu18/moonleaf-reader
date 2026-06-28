@@ -59,10 +59,14 @@ class _HighlightPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_HighlightPainter old) {
+    if (identical(highlights, old.highlights)) return false;
     if (highlights.length != old.highlights.length) return true;
     for (var i = 0; i < highlights.length; i++) {
       if (highlights[i].id != old.highlights[i].id) return true;
       if (highlights[i].color != old.highlights[i].color) return true;
+      if (highlights[i].rects.length != old.highlights[i].rects.length) {
+        return true;
+      }
     }
     return false;
   }

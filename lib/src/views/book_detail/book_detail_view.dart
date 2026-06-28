@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../components/add_to_category_sheet.dart';
 import '../../components/book_cover.dart';
+import '../../components/move_to_collection_sheet.dart';
 import '../../services/i_book_repository.dart';
 import '../../services/i_category_service.dart';
 import '../../services/i_highlight_service.dart';
@@ -148,10 +149,16 @@ class BookDetailView extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MetaChip(icon: Icons.local_offer_outlined, label: book.category),
-              _MetaChip(
-                icon: Icons.menu_book_outlined,
-                label: 'chapter'.plural(book.chapterCount),
-              ),
+              if (book.isPdf) ...[
+                _MetaChip(
+                  icon: Icons.description_outlined,
+                  label: 'page'.plural(book.pageCount),
+                ),
+              ] else
+                _MetaChip(
+                  icon: Icons.menu_book_outlined,
+                  label: 'chapter'.plural(book.chapterCount),
+                ),
               _MetaChip(
                 icon: Icons.schedule_outlined,
                 label: '${book.totalReadingMinutes} min',
@@ -159,39 +166,65 @@ class BookDetailView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Add to collection button.
+          // Collection management button.
           Center(
-            child: ActionChip(
-              avatar: const Icon(Icons.library_add_outlined, size: 18),
-              label: const Text('Add to collection'),
-              onPressed: () {
-                final catService = context.read<ICategoryService>();
-                final allCats = catService.getAll();
-                final memberCats = allCats
-                    .where((c) => c.bookIds.contains(book.id))
-                    .toList();
-                showAddToCategorySheet(
-                  context: context,
-                  bookId: book.id,
-                  allCategories: allCats,
-                  memberCategories: memberCats,
-                  onAdd: (catId) => catService.addBook(catId, book.id),
-                  onRemove: (catId) =>
-                      catService.removeBook(catId, book.id),
-                  onCreate: (name) async {
-                    await catService.create(name);
-                    // Auto-add the book to the newly created category.
-                    final updated = catService.getAll();
-                    if (updated.isNotEmpty) {
-                      await catService.addBook(
-                        updated.last.id,
-                        book.id,
+            child: book.isPdf
+                ? ActionChip(
+                    avatar: const Icon(Icons.drive_file_move_outlined, size: 18),
+                    label: const Text('Move to collection'),
+                    onPressed: () async {
+                      final newCategory = await showMoveToCollectionSheet(
+                        context,
+                        currentCategory: book.category,
                       );
-                    }
-                  },
-                );
-              },
-            ),
+                      if (newCategory != null && context.mounted) {
+                        final pdfService = context.read<IPdfService>();
+                        final booksRepo = context.read<IBookRepository>();
+                        await pdfService.updateCategory(book.id, newCategory);
+                        // Refresh the in-memory book to reflect the new category.
+                        booksRepo.removeBook(book.id);
+                        for (final b in pdfService.getImportedBooks()) {
+                          if (b.id == book.id) {
+                            booksRepo.addBook(b);
+                            break;
+                          }
+                        }
+                        if (context.mounted) {
+                          context.read<BookDetailViewModel>().refresh();
+                        }
+                      }
+                    },
+                  )
+                : ActionChip(
+                    avatar: const Icon(Icons.library_add_outlined, size: 18),
+                    label: const Text('Add to collection'),
+                    onPressed: () {
+                      final catService = context.read<ICategoryService>();
+                      final allCats = catService.getAll();
+                      final memberCats = allCats
+                          .where((c) => c.bookIds.contains(book.id))
+                          .toList();
+                      showAddToCategorySheet(
+                        context: context,
+                        bookId: book.id,
+                        allCategories: allCats,
+                        memberCategories: memberCats,
+                        onAdd: (catId) => catService.addBook(catId, book.id),
+                        onRemove: (catId) =>
+                            catService.removeBook(catId, book.id),
+                        onCreate: (name) async {
+                          await catService.create(name);
+                          final updated = catService.getAll();
+                          if (updated.isNotEmpty) {
+                            await catService.addBook(
+                              updated.last.id,
+                              book.id,
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
           ),
           const SizedBox(height: AppConstants.gapL),
           Text('About', style: context.text.titleLarge),
